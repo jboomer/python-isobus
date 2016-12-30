@@ -166,8 +166,8 @@ class IBSInterface():
 
 
     def _SendETPMessage(self, pgn, da, sa, data):
-        etpcm_id = IBSID(da, sa, PGN_TP_CM, prio=6)
-        etpdt_id = IBSID(da, sa, PGN_TP_DT, prio=6)
+        etpcm_id = IBSID(da, sa, PGN_ETP_CM, prio=6)
+        etpdt_id = IBSID(da, sa, PGN_ETP_DT, prio=6)
 
         mesg_size = len(data)
 

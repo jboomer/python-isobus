@@ -32,7 +32,7 @@ class IBSID():
         pgn = 0
         da = 0xFF
 
-        if ((canid >> 16) & 0xFF) > 0xEF:
+        if ((canid >> 16) & 0xFF) <= 0xEF:
             #Destination specific
             pgn = (canid >> 8) & 0xFF00
             da = (canid >> 8) & 0xFF
