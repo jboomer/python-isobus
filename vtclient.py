@@ -3,10 +3,12 @@
 import time #sleep
 import cmd #shell
 import sys #argv
+import logging
 
 import isobus
-
 from isobus.vt.vt_client_if import IBSVTInterface
+
+logging.basicConfig(filename='vtclient.log', filemode='w', level=logging.DEBUG)
 
 def BuildISOBUSName(**kwargs):
     # Set the default values TODO: Check these values
@@ -49,14 +51,17 @@ class VTClient():
         self.alive = False
         self.functionInstance = 0x00
 
-    def ConnectToVT(self, sa, da):
-        ret = False
+    def SetSrc(self, sa):
+        if sa >= 0 and sa <= 0xFE:
+            self.sa = sa
 
+    def ConnectToVT(self, da):
+        ret = False
+        
         gotStatus, _ = self.connection.WaitForStatusMessage(da)
         ibsName = BuildISOBUSName(functionInstance = self.functionInstance)
         if gotStatus:
-            self.connection.ClaimAddress(sa, ibsName)
-            self.sa = sa
+            self.connection.ClaimAddress(self.sa, ibsName)
             self.connection.SendWSMaintenance(True, self.sa, da)
             time.sleep(0.5)
             self.connection.StartWSMaintenace(self.sa, da)
@@ -308,10 +313,13 @@ class VTClientShell(cmd.Cmd) :
 
     def do_setsrc(self, sa):
         'Sets the source address to use (0x0A is default): setsrc SA'
-        try:
-            MY_SA=InputNumber(sa).value
-        except ValueError:
-            print('Please enter a source address such as 0x0A or 38')
+        if not vtClient.alive:
+            try:
+                vtClient.SetSrc(InputNumber(sa).value)
+            except ValueError:
+                print('Please enter a source address such as 0x0A or 38')
+        else:
+            print('Disconnect before changing source address')
 
     def do_setfi(self, fi):
         'Sets the function instance to use (0x00 is default): setfi FUNCTIONINSTANCE'
@@ -352,7 +360,7 @@ class VTClientShell(cmd.Cmd) :
     def do_connect(self, vtsa):
         'Connect to a VT: connect SA '
         try:
-            vtClient.ConnectToVT(MY_SA, InputNumber(vtsa).value)
+            vtClient.ConnectToVT(InputNumber(vtsa).value)
         except ValueError:
             print("Please enter a source address such as 0x0A or 38")
 
@@ -426,9 +434,10 @@ class VTClientShell(cmd.Cmd) :
 # Construct global objects, TODO: 'App' class, which has the shell
 conn = IBSVTInterface()
 vtClient = VTClient(conn)
-MY_SA = 0x0A
+vtClient.SetSrc(0x0A) # Default source address
 
-if __name__ == "__main__":
+def main():
+    logging.info('Starting shell')
     shell = VTClientShell()
     if len(sys.argv) == 2:
         with open(sys.argv[1], 'r') as script:
@@ -437,3 +446,6 @@ if __name__ == "__main__":
         input('Done!')
     else :
         shell.cmdloop()
+
+if __name__ == "__main__":
+    main()

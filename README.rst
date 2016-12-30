@@ -1,7 +1,7 @@
 python-isobus
 =============
 
-Summary
+Implementation of the ISOBUS (ISO11783) standard in Python. Currently only a VT client. CLI for VT client can be found in the vtclient.py module.
 
 
 TODO
