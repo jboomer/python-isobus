@@ -1,3 +1,6 @@
 iop/*
+scripts/*
+tags
+*.log
 *.swp
 *.pyc

@@ -9,7 +9,7 @@ from isobus.ibsid import IBSID
 from isobus.constants import *
 
 INTERFACE = 'socketcan_native'
-CHANNEL = 'vcan0'
+CHANNEL = 'can0'
 
 can.rc['interface'] = INTERFACE
 can.rc['channel'] = CHANNEL
@@ -102,12 +102,15 @@ class IBSInterface():
         received = False
         data = [RESERVED] * 8 # Dummy data for when nothing is received
         starttime = time.time()
+        matchID = IBSID(da = tosa, sa = fromsa, pgn = pgn, prio = 6)
         while not(received):
             mesg = self.bus.recv(0.5)
             if mesg is not None:
-                if (((mesg.arbitration_id >> 8) & 0xFFFF) == (pgn | (tosa & 0xFF))
-                        and (mesg.arbitration_id & 0xFF) == fromsa
-                        and mesg.data[0] == muxByte):
+                receivedID = IBSID.FromCANID(mesg.arbitration_id)
+                if (receivedID.pgn == matchID.pgn
+               and receivedID.da  == matchID.da
+               and receivedID.sa  == matchID.sa
+               and mesg.data[0]   == muxByte):
                     received= True
                     data = mesg.data
                     break
@@ -160,7 +163,8 @@ class IBSInterface():
 
         # Send bytes
         for seqN in range(nr_of_packets):
-            self._SendCANMessage(tpdt_id.GetCANID(), [seqN + 1] + data[seqN * 7:seqN * 7 + 7])
+            startByte = seqN * 7
+            self._SendCANMessage(tpdt_id.GetCANID(), [seqN + 1] + data[startByte:startByte + 7])
             # sleep 1 msec, otherwise hardware buffer gets full!
             time.sleep(0.001)
 
@@ -186,7 +190,7 @@ class IBSInterface():
         
         # Pack data with 0xFF to multiple of 7
         if len(data) % 7 > 0:
-            data = data + list([0xFF] * (7 - (len(data) % 7)))
+            data = data + list([RESERVED] * (7 - (len(data) % 7)))
 
         
         # Setup for the data transfer

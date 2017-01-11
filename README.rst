@@ -6,9 +6,10 @@ Implementation of the ISOBUS (ISO11783) standard in Python. Currently only a VT 
 
 TODO
 ----
+- VTClient : Notifier for activation messages
+- VTClient : Implement aux client (aux maintenance)
 - Implement receiving TP session
 - Implement BAM
-- VTClient : Notifier for activation messages
 - VTClient : List connected VTs
 - VTClient : Get versions command
 - Channel/Interface from config file
