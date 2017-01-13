@@ -12,7 +12,8 @@ TODO
 - Implement BAM
 - VTClient : List connected VTs
 - VTClient : Get versions command
-- Channel/Interface from config file
+- Channel/Interface from config file/ CL
+- Test w/Windows & Python 2
 - comments in scripts
 - VTClient : GUI interface w/ pygtk or pyQT
 - Use sphinx documentation

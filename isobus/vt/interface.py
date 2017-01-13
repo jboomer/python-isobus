@@ -4,8 +4,9 @@ from isobus.numvalue import NumericValue
 from isobus.ibsinterface import IBSInterface
 from isobus.ibsid import IBSID
 from isobus.constants import *
+from isobus.log import log
+from isobus.common import IBSException
 
-log = logging.getLogger(__name__)
 
 class IBSVTInterface(IBSInterface):
     """ Implements ISOBUS part 6 funcationality (Version 3)
@@ -104,16 +105,14 @@ class IBSVTInterface(IBSInterface):
             candata = [0xD1] + [ord(x) for x in version]
             self._SendIBSMessage(PGN_ECU2VT, da, sa, candata)
         else :
-            print("Version {0} is not 7 characters".format(
-                    version))
+            raise IBSException("Version {0} is not 7 characters".format(version))
 
     def SendStoreVersioncommand(self, version, da, sa):
         if len(version) == 7:
             candata = [0xD0] + [ord(x) for x in version]
             self._SendIBSMessage(PGN_ECU2VT, da, sa, candata)
         else :
-            print("Version {0} is not 7 characters".format(
-                    version))
+            raise IBSException("Version {0} is not 7 characters".format(version))
 
     def WaitLoadVersionResponse(self, vtsa, ecusa):
         #TODO: Should wait 3 status messages w/parsing bit=0 i.o. 3 seconds
@@ -159,7 +158,7 @@ class IBSVTInterface(IBSInterface):
         self._SendIBSMessage(PGN_ECU2VT, vtsa, ecusa, [0x12] + [0xFF] * 7)
 
     def WaitEndOfObjectPoolResponse(self, vtsa, ecusa):
-        [received, data] = self._WaitForIBSMessage(PGN_VT2ECU, vtsa, ecusa, 0x12)
+        [received, data] = self._WaitForIBSMessage(PGN_VT2ECU, vtsa, ecusa, 0x12, 5.0)
         return received, data[1]
         # TODO: Return error codes + faulty objects?
 
@@ -169,6 +168,18 @@ class IBSVTInterface(IBSInterface):
     def WaitDeleteObjectPoolResponse(self, vtsa, ecusa):
         [received, data] = self._WaitForIBSMessage(PGN_VT2ECU, vtsa, ecusa, 0xB2)
         return received, data[1]
+
+    def SendChangeListItemCommand(self, vtsa, ecusa, objectid, index, newid):
+        candata = ([0xB1] 
+                    + NumericValue(objectid).AsLEBytes(2) 
+                    + [index & 0xFF]
+                    + NumericValue(newid).AsLEBytes(2)
+                    + [RESERVED])
+        self._SendIBSMessage(PGN_ECU2VT, vtsa, ecusa, candata)
+
+    def WaitForChangeListItemResponse(self, vtsa, ecusa):
+        [received, data] = self._WaitForIBSMessage(PGN_VT2ECU, vtsa, ecusa, 0xB1)
+        return received, data[6]
 
     def SendIdentifyVT(self, sa):
         log.debug('Sending identify VT')

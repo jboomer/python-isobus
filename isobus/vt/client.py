@@ -1,5 +1,9 @@
 import time
 from isobus.vt.interface import IBSVTInterface
+from isobus.common import IBSException
+from isobus.log import log
+
+#TODO: Replace True/False with exceptions
 
 def BuildISOBUSName(**kwargs):
     # Set the default values TODO: Check these values
@@ -33,8 +37,8 @@ class VTClient():
     
     # Return True or False on commands based on success
 
-    def __init__(self) :
-        self.connection = IBSVTInterface()
+    def __init__(self, interface, channel) :
+        self.connection = IBSVTInterface(interface, channel)
         self.sa = 0xFE
         self.da = 0xFF
         self.alive = False
@@ -45,8 +49,6 @@ class VTClient():
             self.sa = sa
 
     def ConnectToVT(self, da):
-        ret = False
-        
         gotStatus, _ = self.connection.WaitForStatusMessage(da)
         ibsName = BuildISOBUSName(functionInstance = self.functionInstance)
         if gotStatus:
@@ -56,51 +58,39 @@ class VTClient():
             self.connection.StartWSMaintenace(self.sa, da)
             self.alive = True
             self.da = da
-            ret = True
         else:
-            print("Failed to connect to VT")
-
-        return ret
+            raise IBSException("Failed to connect to VT")
 
     def LoadVersion(self, version):
-        ret = False
-        print("Loading version {0}".format(version))
+        log.debug('Loading version {0}'.format(version))
         if self.alive:
             self.connection.SendLoadVersionCommand(version, self.sa, self.da)
             
             # TODO wait for load version response max 3 status messages w/parsing = 0
             [receivedResponse, error] = self.connection.WaitLoadVersionResponse(self.da, self.sa)
             if receivedResponse and (error == 0):
-                print("Loaded version: {0}".format(version))
-                ret = True
+                pass
             else:
-                print("Did not load version, error code: {0}".format(error))
+                raise IBSException("Did not load version, error code: {0}".format(error))
         else :
-            print("Not connected to a VT")
-
-        return ret
+            raise IBSException("Not connected to a VT")
 
     def StoreVersion(self, version):
-        ret = False
-        print("Storing version {0}".format(version))
+        log.debug('Storing version {0}'.format(version))
         if self.alive:
             self.connection.SendStoreVersioncommand(version, self.da, self.sa)
             
             # TODO wait for load version response max 3 status messages w/parsing = 0
             [receivedResponse, error] = self.connection.WaitStoreVersionResponse(self.da, self.sa)
             if receivedResponse and (error == 0):
-                print("Stored version: {0}".format(version))
-                ret = True
+                pass
             else:
-                print("Did not store version, error code: {0}".format(error))
+                raise IBSException("Did not store version, error code: {0}".format(error))
         else :
-            print("Not connected to a VT")
-
-        return ret
+            raise IBSException("Not connected to a VT")
 
 
     def UploadPoolData(self, data, eoop=True):
-        ret = False
         if self.alive:
 
             self.connection.SendGetMemory(len(data), self.da, self.sa)
@@ -113,26 +103,24 @@ class VTClient():
 
                 if eoop:
                     self.connection.SendEndOfObjectPool(self.da, self.sa)
-                    [received, error] = self.connection.WaitEndOfObjectPoolResponse(self.da, self.sa)
+                    [received, error] = self.connection.WaitEndOfObjectPoolResponse(
+                            self.da, self.sa)
                     if received and error == 0:
-                        print("Pool uploaded")
-                        ret = True
+                        pass
                     elif received:
-                        print("Received error code {0}".format(error))
+                        raise IBSException("Received error code {0}".format(error))
                     else:
-                        print("EoOP Response timed out")
+                        raise IBSException("EoOP Response timed out")
             elif receivedMemResp:
-                print('Not enough memory available')
+                raise IBSException('Not enough memory available')
             else:
-                print('No Get Memory Response received')
+                raise IBSException('No Get Memory Response received')
 
         else :
-            print("Not connected to a VT")
+            raise IBSException("Not connected to a VT")
 
-        return ret
 
     def DeleteObjectPool(self):
-        ret = False
         if self.alive:
 
             self.connection.SendDeleteObjectPool(self.da, self.sa)
@@ -141,21 +129,17 @@ class VTClient():
             [receivedResponse, error] = self.connection.WaitDeleteObjectPoolResponse(
                     self.da, self.sa)
             if receivedResponse and (error == 0):
-                print("Deleted objectpool")
-                ret = True
+                pass
             elif receivedResponse:
-                print("Got error: {0}".format(error))
+                raise IBSException("Got error: {0}".format(error))
             else:
-                print("Response timed out")
+                raise IBSException("Response timed out")
 
         else :
-            print("Not connected to a VT")
-
-        return ret
+            raise IBSException("Not connected to a VT")
 
 
     def ChangeActiveMask(self, wsid, maskid):
-        ret = False
         if self.alive:
             self.connection.SendChangeActiveMask(wsid, maskid, self.sa, self.da)
 
@@ -163,38 +147,33 @@ class VTClient():
                     self.connection.WaitForChangeActiveMaskResponse(self.da, self.sa))
 
             if receivedResponse and (error == 0):
-                print("New active mask = 0X{:04X}".format(newMaskID))
+                log.debug("New active mask = 0X{:04X}".format(newMaskID))
                 ret = True
             elif receivedResponse:
-                print("Error change active mask, error code: {0}".format(error))
+                raise IBSException("Error change active mask, error code: {0}".format(error))
             else:
-                print("No response received")
+                raise IBSException("No response received")
 
         else:
-            print("Not connected to a VT")
-        return ret
+            raise IBSException("Not connected to a VT")
 
     def ChangeSKMask(self, maskid, skmaskid, alarm=False):
-        ret = False
         if self.alive:
             self.connection.SendChangeSKMask(maskid, skmaskid, alarm, self.da, self.sa)
 
             [receivedResponse, error, newSKMaskID] = (
                     self.connection.WaitForChangeSKMaskResponse(self.da, self.sa))
             if receivedResponse and (error == 0):
-                print("New SK mask = 0X{:04X}".format(newSKMaskID))
-                ret = True
+                return newSKMaskID
             elif receivedResponse:
-                print("Error change active mask, error code: {0}".format(error))
+                raise IBSException("Error change active mask, error code: {0}".format(error))
             else:
-                print("No response received")
+                raise IBSException("No response received")
         else:
-            print("Not connected to a VT")
+            raise IBSException("Not connected to a VT")
 
-        return ret
 
     def ChangeAttribute(self, objid, attrid, value):
-        ret = False
         if self.alive:
             self.connection.SendChangeAttribute(objid, attrid, value, self.da, self.sa)
 
@@ -202,40 +181,49 @@ class VTClient():
                     self.connection.WaitChangeAttributeResponse(self.da, self.sa))
 
             if receivedResponse and (error == 0):
-                print("Attribute changed")
-                ret = True
+                pass
             elif receivedResponse:
-                print("Error change attribute, error code: {0}".format(error))
+                raise IBSException("Error change attribute, error code: {0}".format(error))
             else:
-                print("No response received")
+                raise IBSException("No response received")
 
         else:
-            print("Not connected to a VT")
-
-        return ret
+            raise IBSException("Not connected to a VT")
 
     def ChangeNumericValue(self, objid, value):
-        ret = False
         if self.alive:
             self.connection.SendChangeNumericValue(objid, value, vtsa = self.da, ecusa = self.sa)
             [receivedResponse, error] = (
                     self.connection.WaitForChangeNumericValueResponse(self.da, self.sa))
 
             if receivedResponse and (error == 0):
-                print("Numeric value changed")
-                ret = True
+                pass
             elif receivedResponse:
-                print("Error change numeric value, error code: {0}".format(error))
+                raise IBSException("Error change numeric value, error code: {0}".format(error))
             else:
-                print("No response received")
+                raise IBSException("No response received")
         else:
-            print("Not connected to a VT")
+            raise IBSException("Not connected to a VT")
 
-        return ret
+
+    def ChangeListItem(self, objid, index, value):
+        if self.alive:
+            self.connection.SendChangeListItemCommand(self.da, self.sa, objid, index, value)
+            [receivedResponse, error] = (
+                    self.connection.WaitForChangeListItemResponse(self.da, self.sa))
+
+            if receivedResponse and (error == 0):
+                pass
+            elif receivedResponse:
+                raise IBSException("Error change list item, error code: {0}".format(error))
+            else:
+                raise IBSException("No response received")
+        else:
+            raise IBSException("Not connected to a VT")
+
 
 
     def ESCInput(self):
-        ret = False
         if self.alive:
             self.connection.SendEscCommand(self.da, self.sa)
 
@@ -243,19 +231,16 @@ class VTClient():
             self.connection.WaitForESCResponse(self.da, self.sa))
             
             if receivedResponse and (error == 0):
-                print("ESC object 0x{:04X}".format(escObject))
-                ret = True
+                return escObject
             elif receivedResponse and (error == 1):
-                print("No input object open")
+                raise IBSException("No input object open")
             elif receivedResponse:
-                print("Error code: {0}".format(error))
+                raise IBSException("Error code: {0}".format(error))
             else:
-                print("No response received")
+                raise IBSException("No response received")
 
         else:
-            print("Not connected to a VT")
-
-        return ret
+            raise IBSException("Not connected to a VT")
 
 
     def DisconnectFromVT(self):

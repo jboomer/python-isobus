@@ -2,21 +2,15 @@ import can
 import random #randint
 import math # ceil
 import time #sleep
-import logging
 
 from isobus.numvalue import NumericValue
 from isobus.ibsid import IBSID
 from isobus.constants import *
-
-INTERFACE = 'socketcan_native'
-CHANNEL = 'can0'
-
-can.rc['interface'] = INTERFACE
-can.rc['channel'] = CHANNEL
+from isobus.log import log
+from isobus.common import IBSException
 
 from can.interfaces.interface import Bus
 
-log = logging.getLogger(__name__)
 
 
 class IBSInterface():
@@ -24,7 +18,10 @@ class IBSInterface():
     Implements general ISOBUS functionality
     """
 
-    def __init__(self):
+    def __init__(self, interface, channel):
+
+        can.rc['interface'] = interface
+        can.rc['channel'] = channel
         log.info('Opening CAN connection on {0}'.format(
             can.rc['channel']))
         self.bus = Bus()
@@ -39,7 +36,7 @@ class IBSInterface():
         msg = can.Message(arbitration_id=(ibsid.GetCANID() | (1 << 31)),
                           data=contents,
                           extended_id=True)
-        self.periodic_tasks.append(can.send_periodic(CHANNEL, msg, period))
+        self.periodic_tasks.append(can.send_periodic(can.rc['channel'], msg, period))
 
     def StopPeriodicMessage(self, ibsid):
         # For socketcan_native, bit 32 (MSb) needs to be set for extended ID
@@ -131,15 +128,15 @@ class IBSInterface():
             log.warning('ERROR : CAN message too large to send')
 
     def _SendTPMessage(self, pgn, da, sa, data):
-        tpcm_id = IBSID(da, sa, PGN_TP_CM, prio=6)
-        tpdt_id = IBSID(da, sa, PGN_TP_DT, prio=6)
+        tpcm_id = IBSID(da, sa, pgn=PGN_TP_CM, prio=6)
+        tpdt_id = IBSID(da, sa, pgn=PGN_TP_DT, prio=7)
 
         # Send RTS
         rts_control = 0x10
         nr_of_packets = int(math.ceil(len(data) / 7.0))
         rts_data = ([rts_control] 
                     + NumericValue(len(data)).AsLEBytes(2) 
-                    + [nr_of_packets, 0xFF]
+                    + [nr_of_packets, RESERVED]
                     + NumericValue(pgn).AsLEBytes(3))
 
         log.debug('Sending RTS for PGN {0} : {1} bytes in {2} packets'.format(
@@ -171,7 +168,7 @@ class IBSInterface():
 
     def _SendETPMessage(self, pgn, da, sa, data):
         etpcm_id = IBSID(da, sa, PGN_ETP_CM, prio=6)
-        etpdt_id = IBSID(da, sa, PGN_ETP_DT, prio=6)
+        etpdt_id = IBSID(da, sa, PGN_ETP_DT, prio=7)
 
         mesg_size = len(data)
 
@@ -202,7 +199,6 @@ class IBSInterface():
             # TODO: What is the time out for this one?
             [received, ctsdata] = self._WaitForIBSMessage(0xC800, da, sa, 0x15)
             if received:
-              #  nextPacket = (ctsdata[4] << 16) | (ctsdata[3] << 8) | (ctsdata[2])
                 nextPacket = NumericValue.FromLEBytes(ctsdata[2:5]).Value()
                 maxSentPackets = ctsdata[1]
                 log.debug("ETP : Received CTS for max {0} packets, next packet {1}".format(

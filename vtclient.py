@@ -4,6 +4,9 @@ import time #sleep
 import cmd #shell
 import sys #argv
 import logging
+import argparse
+import os
+import glob
 
 import isobus
 
@@ -11,8 +14,7 @@ logging.basicConfig(filename='vtclient.log', filemode='w', level=logging.DEBUG)
 
 
 class InputNumber():
-    """
-    Interpret a number from string, 0x or 0X prefix is hex.
+    """ Interpret a number from string, 0x or 0X prefix is hex.
     May throw ValueError
     """
     def __init__(self, fromtext, aliases=None):
@@ -23,11 +25,16 @@ class InputNumber():
                 self.value = int(fromtext, 16)
             else:
                 self.value = int(fromtext)
+
+def _append_slash_if_dir(p):
+    if p and os.path.isdir(p) and p[-1] != os.sep:
+        return p + os.sep
+    else:
+        return p
+
   
 class VTClientShell(cmd.Cmd) :
-    """
-    CLI for the VT Connection
-    """
+    """ CLI for the VT Connection """
     intro = 'VT Client CLI, type help or ? to list commands'
     prompt = 'vtclient> '
     file = None
@@ -64,17 +71,29 @@ class VTClientShell(cmd.Cmd) :
 
     def do_loadver(self, version):
         'Load a version of the working set: loadver ABC1234'
-        vtClient.LoadVersion(version)
+        try:
+            vtClient.LoadVersion(version)
+        except isobus.IBSException as e:
+            print('Error: {reason}'.format(reason=e.args[0]))
 
     def do_storever(self, version):
         'Store a version of the working set: storever ABC1234'
-        vtClient.StoreVersion(version)
+        if len(version) == 7:
+            try:
+                vtClient.StoreVersion(version)
+            except isobus.IBSException as e:
+                print('Error: {reason}'.format(reason=e.args[0]))
+        else:
+            print('Version string is not 7 characters')
 
     def do_poolup(self, filename):
         'Upload a complete pool from file: poolup FILENAME.IOP'
         try:
             with open(filename, "rb") as iopfile:
-                vtClient.UploadPoolData([byte for byte in iopfile.read()])
+                try:
+                    vtClient.UploadPoolData([byte for byte in iopfile.read()])
+                except isobus.IBSException as e:
+                    print('Error: {reason}'.format(reason=e.args[0]))
         except FileNotFoundError:
             print('File not found')
     
@@ -82,20 +101,29 @@ class VTClientShell(cmd.Cmd) :
         'Upload part of a pool (does not send EoOP): poolpart FILENAME.IOP'
         try:
             with open(filename, "rb") as iopfile:
-                vtClient.UploadPoolData([byte for byte in iopfile.read()], False)
+                try:
+                    vtClient.UploadPoolData([byte for byte in iopfile.read()], False)
+                except isobus.IBSException as e:
+                    print('Error: {reason}'.format(reason=e.args[0]))
         except FileNotFoundError:
             print('File not found')
 
     def do_delpool(self, arg):
         'Delete object pool from volatile memory'
-        vtClient.DeleteObjectPool()
+        try:
+            vtClient.DeleteObjectPool()
+        except isobus.IBSException as e:
+            print('Error: {reason}'.format(reason=e.args[0]))
 
     def do_connect(self, vtsa):
         'Connect to a VT: connect SA '
         try:
             vtClient.ConnectToVT(InputNumber(vtsa).value)
+            print('Connected to VT with sa {sa}'.format(sa = vtsa))
         except ValueError:
             print("Please enter a source address such as 0x0A or 38")
+        except isobus.IBSException:
+            print('Failed to connect to VT with sa {sa}'.format(sa=vtsa))
 
     def do_disconnect(self, arg):
         'Disconnect From a VT: disconnect'
@@ -107,13 +135,18 @@ class VTClientShell(cmd.Cmd) :
             vtClient.ChangeActiveMask(*self._get_int_args(args))
         except ValueError:
             print('Syntax error')
+        except isobus.IBSException as e:
+            print('Error: {reason}'.format(reason=e.args[0]))
 
     def do_chgskmask(self, args):
         'Send a Change SK Mask command: chgskmask MASKID SOFTKEYMASKID'
         try:
             arglist = self._get_int_args(args)
             if len(arglist) == 2:
-                vtClient.ChangeSKMask(*arglist, alarm=False)
+                try:
+                    vtClient.ChangeSKMask(*arglist, alarm=False)
+                except isobus.IBSException as e:
+                    print('Error: {reason}'.format(reason=e.args[0]))
             else:
                 print('Syntax error')
         except ValueError:
@@ -127,6 +160,8 @@ class VTClientShell(cmd.Cmd) :
                 vtClient.ChangeAttribute(*arglist)
             except ValueError:
                 print('Syntax error')
+            except isobus.IBSException as e:
+                print('Error: {reason}'.format(reason=e.args[0]))
         else:
             print('Syntax error')
 
@@ -135,15 +170,33 @@ class VTClientShell(cmd.Cmd) :
         try:
             arglist = self._get_int_args(args)
             if len(arglist) == 2:
-                vtClient.ChangeNumericValue(*arglist)
+                try:
+                    vtClient.ChangeNumericValue(*arglist)
+                except isobus.IBSException as e:
+                    print('Error: {reason}'.format(reason=e.args[0]))
             else:
                 print('{0} arguments expected, {1} given'.format(2, len(arglist)))
         except ValueError:
             print('Invalid syntax')
 
+    def do_chglistitem(self, args):
+        'Send a change list item command: chglistitem OBJID INDEX VALUE'
+        try:
+            arglist = self._get_int_args(args)
+            if len(arglist) == 3:
+                vtClient.ChangeListItem(*arglist)
+            else:
+                print('{0} arguments expected, {1} given'.format(3, len(arglist)))
+        except ValueError:
+            print('Invalid syntax')
+
     def do_esc(self, arg):
         'Send an ESC command to the VT, to escape user input: esc'
-        vtClient.ESCInput()
+        try:
+            ret = vtClient.ESCInput()
+            print('ESC object 0x{objid}'.format(objid=ret))
+        except isobus.IBSException as e:
+            print('Error: {reason}'.format(reason=e.args[0]))
 
     def do_identify(self, arg):
         'Send a message to all VTs to display (propietary) identification means'
@@ -160,23 +213,58 @@ class VTClientShell(cmd.Cmd) :
         'Exit the CLI: exit'
         print("Exiting...")
         return True
+
+    def complete_poolup(self, text, line, begidx, endidx):
+        return self._tab_complete_filepath(text, line, begidx, endidx)
+
+    def complete_poolpart(self, text, line, begidx, endidx):
+        return self._tab_complete_filepath(text, line, begidx, endidx)
+
+    def _tab_complete_filepath(self, text, line, begidx, endidx):
+        before_arg = line.rfind(" ", 0, begidx)
+        if before_arg == -1:
+            return # arg not found
+
+        fixed = line[before_arg+1:begidx]  # fixed portion of the arg
+        arg = line[before_arg+1:endidx]
+        pattern = arg + '*'
+
+        completions = []
+        for path in glob.glob(pattern):
+            path = _append_slash_if_dir(path)
+            completions.append(path.replace(fixed, "", 1))
+        return completions    
+    
     
     def _get_int_args(self, args):
         return [InputNumber(x, self.aliases).value for x in args.split()]
 
+parser = argparse.ArgumentParser(description = 'CLI for a VT Client')
+parser.add_argument('-s', '--script'
+                    , help='Run a script instead of the interactive CL')
+parser.add_argument('-i', '--interface' 
+                    , default='socketcan_native' 
+                    , choices=['pcan', 'socketcan_native', 'socketcan_ctypes']
+                    , help='Interface, default=socketcan_native')
+parser.add_argument('-c', '--channel'
+                    , default='vcan0'
+                    , help='Channel/bus name, default=vcan0')
+args = parser.parse_args()
+
 # Construct global objects, TODO: 'App' class, which has the shell
-vtClient = isobus.VTClient()
+vtClient = isobus.VTClient(interface = args.interface, channel = args.channel)
 vtClient.SetSrc(0x0A) # Default source address
 
 def main():
-    logging.info('Starting shell')
     shell = VTClientShell()
-    if len(sys.argv) == 2:
-        with open(sys.argv[1], 'r') as script:
+    if args.script is not None:
+        logging.info('Starting script')
+        with open(args.script, 'r') as script:
             for line in script.readlines():
                 shell.onecmd(line)
         input('Done!')
     else :
+        logging.info('Starting shell')
         shell.cmdloop()
 
 if __name__ == "__main__":

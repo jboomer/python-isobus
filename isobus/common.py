@@ -1,0 +1,2 @@
+class IBSException(Exception):
+    pass
