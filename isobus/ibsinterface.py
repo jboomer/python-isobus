@@ -11,12 +11,18 @@ from isobus.common import IBSException
 
 from can.interfaces.interface import Bus
 
+class IBSRxHandler():
+
+    def __init__(self, pgns):
+        self.pgnlist = pgns
+
+    def RxMessage(ibsid, data):
+        raise NotImplemented('Rx handler not implemented!')
 
 
-class IBSInterface():
-    """
-    Implements general ISOBUS functionality
-    """
+
+class IBSInterface(can.Listener):
+    """ Implements general ISOBUS functionality """
 
     def __init__(self, interface, channel):
 
@@ -26,13 +32,37 @@ class IBSInterface():
             can.rc['channel']))
         self.bus = Bus()
         self.periodic_tasks = list()
+        self._rxHandlers = list()
+
+        #Have to use a separate bus object, otherwise WaitForIsobusmessage does not work
+        #self.notifier =  can.Notifier(Bus(), [self])
 
     def __del__(self):
         self.bus.shutdown()
 
+    def on_message_received(self, mesg):
+        #TODO: Check 'listening' flag, if listening, store in queue
+        #      Change 'WaitForIBSMessage' accordingly, so we don't have to call recv on bus
+        #      Then we need a 'Start listening' and 'StopListening' + flushqueue method
+
+        ibsid = IBSID.FromCANID(mesg.arbitration_id)
+        log.debug('Rx Mesg PGN {pgn:04X} SA {sa:02X} DA {da:02X}'.format(
+            pgn=ibsid.pgn, sa=ibsid.sa, da=ibsid.da))
+
+        #TODO: Smarter filters, SA, DA, PGN, muxbyte?
+        for handler in self._rxHandlers:
+            if pgn in handler.pgnlist:
+                handler.RxMessage(ibsid, mesg.data)
+        
+    def AddRxHandler(self, handler):
+        self._rxHandlers.append(handler)
+
+    
     def AddPeriodicMessage(self, ibsid, contents, period):
         # For socketcan_native, bit 32 (MSb) needs to be set for extended ID
         # Is fixed in latest python-can though!
+        log.debug('Adding periodic message ID : 0x{mesgid:08X} period {T}'.format(
+            mesgid = ibsid.GetCANID(), T=period))
         msg = can.Message(arbitration_id=(ibsid.GetCANID() | (1 << 31)),
                           data=contents,
                           extended_id=True)
@@ -43,6 +73,8 @@ class IBSInterface():
         # Is fixed in latest python-can though!
         for periodMsg in self.periodic_tasks:
             if periodMsg.can_id == (ibsid.GetCANID() | (1 << 31)):
+                log.debug('Stopping periodic message ID : 0x{mesgid:08X}'.format(
+                    mesgid = ibsid.GetCANID()))
                 self.periodic_tasks.remove(periodMsg)
                 periodMsg.stop()
                 break
@@ -128,6 +160,7 @@ class IBSInterface():
             log.warning('ERROR : CAN message too large to send')
 
     def _SendTPMessage(self, pgn, da, sa, data):
+        log.debug('(TP) Request starting TP for {n} bytes'.format(n=len(data)))
         tpcm_id = IBSID(da, sa, pgn=PGN_TP_CM, prio=6)
         tpdt_id = IBSID(da, sa, pgn=PGN_TP_DT, prio=7)
 
@@ -139,14 +172,14 @@ class IBSInterface():
                     + [nr_of_packets, RESERVED]
                     + NumericValue(pgn).AsLEBytes(3))
 
-        log.debug('Sending RTS for PGN {0} : {1} bytes in {2} packets'.format(
+        log.debug('(TP) Sending RTS for PGN {0} : {1} bytes in {2} packets'.format(
             pgn, len(data), nr_of_packets))
         self._SendCANMessage(tpcm_id.GetCANID(), rts_data)
 
         # Check the CTS
         [received, ctsdata] = self._WaitForIBSMessage(0xEC00, da, sa, 0x11)
         if received:
-            log.debug('Received CTS for max {0} packets, next packet {1}'.format(
+            log.debug('(TP) Received CTS for max {0} packets, next packet {1}'.format(
                 ctsdata[1], ctsdata[2]))
 
         else:
@@ -160,6 +193,7 @@ class IBSInterface():
 
         # Send bytes
         for seqN in range(nr_of_packets):
+            log.debug('(TP) Send package {n}'.format(n=seqN + 1))
             startByte = seqN * 7
             self._SendCANMessage(tpdt_id.GetCANID(), [seqN + 1] + data[startByte:startByte + 7])
             # sleep 1 msec, otherwise hardware buffer gets full!
@@ -167,6 +201,7 @@ class IBSInterface():
 
 
     def _SendETPMessage(self, pgn, da, sa, data):
+        log.debug('(ETP) Request starting ETP for {n} bytes'.format(n=len(data)))
         etpcm_id = IBSID(da, sa, PGN_ETP_CM, prio=6)
         etpdt_id = IBSID(da, sa, PGN_ETP_DT, prio=7)
 
@@ -176,7 +211,7 @@ class IBSInterface():
         rts_control = 0x14
         totalPackets = int(math.ceil(len(data) / 7.0))
 
-        log.debug("ETP : Sending {0} bytes in {1} packets".format(
+        log.debug("(ETP) Sending {0} bytes in {1} packets".format(
                 len(data), totalPackets))
 
         rts_data = ([rts_control]
@@ -201,20 +236,20 @@ class IBSInterface():
             if received:
                 nextPacket = NumericValue.FromLEBytes(ctsdata[2:5]).Value()
                 maxSentPackets = ctsdata[1]
-                log.debug("ETP : Received CTS for max {0} packets, next packet {1}".format(
+                log.debug("(ETP) Received CTS for max {0} packets, next packet {1}".format(
                     maxSentPackets, nextPacket)
                     )
             else :
-                log.warning('ETP : Wait for CTS timed out')
+                log.warning('(ETP) Wait for CTS timed out')
                 break
             
             packetOffset = nextPacket - 1
             
             nPackets = min(maxSentPackets, totalPackets - packetOffset)
 
-            log.debug('ETP : Sending {0} packets with packet offset {1}'.format(
+            log.debug('(ETP) Sending {0} packets with packet offset {1}'.format(
                 nPackets, packetOffset))
-            log.debug('ETP : bytes[{0} - {1}]'.format(
+            log.debug('(ETP) bytes[{0} - {1}]'.format(
                 packetOffset * 7, packetOffset * 7 + nPackets * 7 - 1))
 
             dpoData = ([0x16]

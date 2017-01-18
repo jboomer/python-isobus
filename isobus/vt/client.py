@@ -2,8 +2,8 @@ import time
 from isobus.vt.interface import IBSVTInterface
 from isobus.common import IBSException
 from isobus.log import log
+from isobus.ibsinterface import IBSRxHandler
 
-#TODO: Replace True/False with exceptions
 
 def BuildISOBUSName(**kwargs):
     # Set the default values TODO: Check these values
@@ -14,7 +14,7 @@ def BuildISOBUSName(**kwargs):
                     , function            = 0x3e
                     , functionInstance    = 0x0 
                     , ECUInstance         = 0x0
-                    , manufacturerCode    = 0x59
+                    , manufacturerCode    = 0x00
                     , idNumber            = 0x01FF
                     )
     for setting in settings.keys():
@@ -31,7 +31,7 @@ def BuildISOBUSName(**kwargs):
              | (settings['manufacturerCode']              << 21)
              | (settings['idNumber']                      << 0 ))
     return ibsName
-    
+
 class VTClient():
     """VT Client (implement) simulation"""
     

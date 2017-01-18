@@ -174,7 +174,7 @@ class IBSVTInterface(IBSInterface):
                     + NumericValue(objectid).AsLEBytes(2) 
                     + [index & 0xFF]
                     + NumericValue(newid).AsLEBytes(2)
-                    + [RESERVED])
+                    + [RESERVED] * 2)
         self._SendIBSMessage(PGN_ECU2VT, vtsa, ecusa, candata)
 
     def WaitForChangeListItemResponse(self, vtsa, ecusa):

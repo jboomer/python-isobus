@@ -3,14 +3,11 @@
 import time #sleep
 import cmd #shell
 import sys #argv
-import logging
 import argparse
 import os
 import glob
 
 import isobus
-
-logging.basicConfig(filename='vtclient.log', filemode='w', level=logging.DEBUG)
 
 
 class InputNumber():
@@ -184,7 +181,10 @@ class VTClientShell(cmd.Cmd) :
         try:
             arglist = self._get_int_args(args)
             if len(arglist) == 3:
-                vtClient.ChangeListItem(*arglist)
+                try:
+                    vtClient.ChangeListItem(*arglist)
+                except isobus.IBSException as e:
+                    print('Error: {reason}'.format(reason=e.args[0]))
             else:
                 print('{0} arguments expected, {1} given'.format(3, len(arglist)))
         except ValueError:
@@ -194,7 +194,7 @@ class VTClientShell(cmd.Cmd) :
         'Send an ESC command to the VT, to escape user input: esc'
         try:
             ret = vtClient.ESCInput()
-            print('ESC object 0x{objid}'.format(objid=ret))
+            print('ESC object 0x{objid:04X}'.format(objid=ret))
         except isobus.IBSException as e:
             print('Error: {reason}'.format(reason=e.args[0]))
 
@@ -239,32 +239,31 @@ class VTClientShell(cmd.Cmd) :
     def _get_int_args(self, args):
         return [InputNumber(x, self.aliases).value for x in args.split()]
 
+# Parse command line arguments
 parser = argparse.ArgumentParser(description = 'CLI for a VT Client')
 parser.add_argument('-s', '--script'
                     , help='Run a script instead of the interactive CL')
 parser.add_argument('-i', '--interface' 
                     , default='socketcan_native' 
                     , choices=['pcan', 'socketcan_native', 'socketcan_ctypes']
-                    , help='Interface, default=socketcan_native')
+                    , help='Interface, default=socketcan_native(only in Python3!)')
 parser.add_argument('-c', '--channel'
                     , default='vcan0'
                     , help='Channel/bus name, default=vcan0')
 args = parser.parse_args()
 
-# Construct global objects, TODO: 'App' class, which has the shell
+# Construct global objects
 vtClient = isobus.VTClient(interface = args.interface, channel = args.channel)
 vtClient.SetSrc(0x0A) # Default source address
 
 def main():
     shell = VTClientShell()
     if args.script is not None:
-        logging.info('Starting script')
         with open(args.script, 'r') as script:
             for line in script.readlines():
                 shell.onecmd(line)
         input('Done!')
     else :
-        logging.info('Starting shell')
         shell.cmdloop()
 
 if __name__ == "__main__":
