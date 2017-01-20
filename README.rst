@@ -1,7 +1,16 @@
 python-isobus
 =============
 
-Implementation of the ISOBUS (ISO11783) standard in Python. Currently only a VT client. CLI for VT client can be found in the vtclient.py module.
+Implementation of the ISOBUS (ISO11783) standard in Python. Currently only the VT client control function is implemented.
+
+Installation instructions
+-------------------------
+Using pip, this will also install dependencies if necessary:
+
+::
+    pip install git+git://github.com/jboomer/python-isobus.git
+
+This will also install a command line tool: vtclient
 
 
 TODO
@@ -13,8 +22,8 @@ TODO
 - Implement BAM
 - VTClient : List connected VTs
 - VTClient : Get versions command
-- Test w/Windows & Python 2
+- Test w/Windows
 - comments in scripts
 - VTClient : GUI interface w/ pygtk or pyQT
-- Use sphinx documentation
+- Use sphinx documentation for API
 - VTClient : Read aliases from file, to be distributed with pool?

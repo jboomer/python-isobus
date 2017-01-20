@@ -93,6 +93,8 @@ class VTClientShell(cmd.Cmd) :
                     print('Error: {reason}'.format(reason=e.args[0]))
         except FileNotFoundError:
             print('File not found')
+        except IsADirectoryError:
+            print('{fName} is a directory'.format(fName=filename))
     
     def do_partpool(self, filename):
         'Upload part of a pool (does not send EoOP): poolpart FILENAME.IOP'
@@ -176,6 +178,21 @@ class VTClientShell(cmd.Cmd) :
         except ValueError:
             print('Invalid syntax')
 
+    def do_chgstrval(self, args):
+        'Send a change string value command: chgstrval OBJID VALUE'
+        arglist = args.split()
+        if len(arglist) == 2:
+            try:
+                objid = InputNumber(arglist[0], self.aliases).value
+                try:
+                    vtClient.ChangeStringValue(objid, arglist[1])
+                except isobus.IBSException as e:
+                    print('Error: {reason}'.format(reason=e.args[0]))
+            except ValueError:
+                print('Invalid syntax')
+        else:
+            print('Invalid syntax : expects 2 arguments')
+
     def do_chglistitem(self, args):
         'Send a change list item command: chglistitem OBJID INDEX VALUE'
         try:
@@ -217,7 +234,7 @@ class VTClientShell(cmd.Cmd) :
     def complete_poolup(self, text, line, begidx, endidx):
         return self._tab_complete_filepath(text, line, begidx, endidx)
 
-    def complete_poolpart(self, text, line, begidx, endidx):
+    def complete_partpool(self, text, line, begidx, endidx):
         return self._tab_complete_filepath(text, line, begidx, endidx)
 
     def _tab_complete_filepath(self, text, line, begidx, endidx):

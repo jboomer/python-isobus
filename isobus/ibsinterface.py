@@ -144,6 +144,7 @@ class IBSInterface(can.Listener):
                     data = mesg.data
                     break
             if (time.time() - starttime) > maxtime:
+                log.debug('Timeout waiting for CAN ID {canid:08X}'.format(canid=matchID.GetCANID()))
                 break
 
         return received, data 
@@ -177,6 +178,7 @@ class IBSInterface(can.Listener):
         self._SendCANMessage(tpcm_id.GetCANID(), rts_data)
 
         # Check the CTS
+        #FIXME: Only send min(nrOfPackets,maxPackets), what to do if less?
         [received, ctsdata] = self._WaitForIBSMessage(0xEC00, da, sa, 0x11)
         if received:
             log.debug('(TP) Received CTS for max {0} packets, next packet {1}'.format(

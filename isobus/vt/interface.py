@@ -150,7 +150,28 @@ class IBSVTInterface(IBSInterface):
         """
         [received, data] = self._WaitForIBSMessage(PGN_VT2ECU, vtsa, ecusa, 0xA8)
         return received, data[3]
+
+    def SendChangeStringValue(self, objid, value, vtsa, ecusa):
+        # TODO: Check for too  large strings!
+        stringData = [ord(x) for x in value]
+
+        if len(stringData) < 3:
+            stringData = stringData + list([RESERVED] * (3 - len(stringData)))
+
+        candata =([0xB3] 
+                + NumericValue(objid).AsLEBytes(2) 
+                + NumericValue(len(value)).AsLEBytes(2)
+                + stringData)
+        self._SendIBSMessage(PGN_ECU2VT, vtsa, ecusa, candata)
+
+    def WaitForChangeStringValueResponse(self, vtsa, ecusa):
+        """
+        Return true for received, error code
+        """
+        [received, data] = self._WaitForIBSMessage(PGN_VT2ECU, vtsa, ecusa, 0xB3)
+        return received, data[5]
     
+
     def SendPoolUpload(self, vtsa, ecusa, pooldata):
         self._SendIBSMessage(PGN_ECU2VT, vtsa, ecusa, [0x11] + pooldata)
 
