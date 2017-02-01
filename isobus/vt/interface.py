@@ -1,8 +1,8 @@
 import logging
 
-from isobus.numvalue import NumericValue
+from isobus.common import NumericValue
 from isobus.ibsinterface import IBSInterface
-from isobus.ibsid import IBSID
+from isobus.common import IBSID
 from isobus.constants import *
 from isobus.log import log
 from isobus.common import IBSException

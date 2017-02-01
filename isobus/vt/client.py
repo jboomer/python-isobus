@@ -3,36 +3,10 @@ from isobus.vt.interface import IBSVTInterface
 from isobus.common import IBSException
 from isobus.log import log
 from isobus.ibsinterface import IBSRxHandler
+from isobus.cf import IBSControlFunction
+from isobus.cf import BuildISOBUSName
 
-
-def BuildISOBUSName(**kwargs):
-    # Set the default values TODO: Check these values
-    settings = dict(  configurable        = 0x0
-                    , industryGroup       = 0x2
-                    , deviceClassInstance = 0X0
-                    , deviceClass         = 0x0
-                    , function            = 0x3e
-                    , functionInstance    = 0x0 
-                    , ECUInstance         = 0x0
-                    , manufacturerCode    = 0x00
-                    , idNumber            = 0x01FF
-                    )
-    for setting in settings.keys():
-        if setting in kwargs.keys():
-            settings[setting] = kwargs[setting]
-
-    ibsName =( (settings['configurable']                  << 63)
-             | (settings['industryGroup']                 << 60)
-             | (settings['deviceClassInstance']           << 56)
-             | (settings['deviceClass']                   << 49)
-             | (settings['function']                      << 40)
-             | (settings['functionInstance']              << 35)
-             | (settings['ECUInstance']                   << 32)
-             | (settings['manufacturerCode']              << 21)
-             | (settings['idNumber']                      << 0 ))
-    return ibsName
-
-class VTClient():
+class VTClient(IBSControlFunction):
     """VT Client (implement) simulation"""
     
     # Return True or False on commands based on success
@@ -52,7 +26,7 @@ class VTClient():
         gotStatus, _ = self.connection.WaitForStatusMessage(da)
         ibsName = BuildISOBUSName(functionInstance = self.functionInstance)
         if gotStatus:
-            self.connection.ClaimAddress(self.sa, ibsName)
+            self.ClaimAddress(self.sa, ibsName)
             self.connection.SendWSMaintenance(True, self.sa, da)
             time.sleep(0.5)
             self.connection.StartWSMaintenace(self.sa, da)

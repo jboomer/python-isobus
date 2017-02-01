@@ -1,13 +1,12 @@
 import can
-import random #randint
 import math # ceil
 import time #sleep
 
-from isobus.numvalue import NumericValue
-from isobus.ibsid import IBSID
+from isobus.common import NumericValue
+from isobus.common import IBSID
+from isobus.common import IBSException
 from isobus.constants import *
 from isobus.log import log
-from isobus.common import IBSException
 
 from can.interfaces.interface import Bus
 
@@ -20,12 +19,14 @@ class IBSRxHandler():
         raise NotImplemented('Rx handler not implemented!')
 
 
-
 class IBSInterface(can.Listener):
-    """ Implements general ISOBUS functionality """
+    """ This class defines the methods for a minimal ISOBUS CF.
+    This means address claiming procedures (part 5) and diagnostics (part 12).
+    Other interfaces inherit from this class to implement specific parts, such as
+    IBSVTInterface (part 6).
+    """
 
     def __init__(self, interface, channel):
-
         can.rc['interface'] = interface
         can.rc['channel'] = channel
         log.info('Opening CAN connection on {0}'.format(
@@ -90,30 +91,20 @@ class IBSInterface(can.Listener):
                 periodMsg.modify_data(self, msg)
                 break
 
-    def ClaimAddress(self, sa, ibsName):
-        # TODO: Check if SA is not already claimed
-        # TODO: Handle configurable address?
-        self._SendRequestAddressClaim(sa)
-        waittime = 250 + (random.randint(0, 255) * 0.6)
-        time.sleep(waittime / 1000.0)
-        self._SendAddressClaim(ibsName, sa)
-        time.sleep(0.250)
-
-
-    ## PROTECTED FUNCTIONS
-    def _SendRequestAddressClaim(self, sa):
+    def SendRequestAddressClaim(self, sa):
         log.debug('Sending Request Address Claim')
-        self._SendRequest(sa, da=SA_GLOBAL, reqPGN=PGN_ADDRCLAIM)
+        self.SendRequest(sa, da=SA_GLOBAL, reqPGN=PGN_ADDRCLAIM)
 
-    def _SendAddressClaim(self, ibsName, sa):
+    def SendAddressClaim(self, ibsName, sa):
         log.debug('Sending Address claim for name {:016X}'.format(
             ibsName))
         candata = NumericValue(ibsName).AsLEBytes(8)
         self._SendIBSMessage(PGN_ADDRCLAIM, SA_GLOBAL, sa, candata)
 
-    def _SendRequest(self, sa, da, reqPGN):
+    def SendRequest(self, sa, da, reqPGN):
         self._SendIBSMessage(PGN_REQUEST, sa, da, NumericValue(reqPGN).AsLEBytes(3))
 
+    ## PROTECTED FUNCTIONS
     def _SendCANMessage(self, canid, candata):
         if len(candata) <= 8:
             msg = can.Message(arbitration_id=canid,
