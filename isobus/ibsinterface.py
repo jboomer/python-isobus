@@ -31,7 +31,7 @@ class IBSInterface(can.Listener):
         can.rc['channel'] = channel
         log.info('Opening CAN connection on {0}'.format(
             can.rc['channel']))
-        self.bus = Bus()
+        self.bus = Bus(bitrate=250000)
         self.periodic_tasks = list()
         self._rxHandlers = list()
 

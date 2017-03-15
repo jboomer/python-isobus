@@ -1,6 +1,7 @@
 class IBSException(Exception):
     pass
 
+#TODO: This doesn't make sense for negative numbers, should they even be allowed?
 class NumericValue():
     """ To store a number which can be read to/from LE or BE """
     def __init__(self, value):

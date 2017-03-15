@@ -281,7 +281,10 @@ def main():
                 shell.onecmd(line)
         input('Done!')
     else :
-        shell.cmdloop()
+        try:
+            shell.cmdloop()
+        except KeyboardInterrupt:
+            print('Exiting...')
 
 if __name__ == "__main__":
     main()

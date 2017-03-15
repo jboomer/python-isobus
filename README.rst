@@ -8,6 +8,7 @@ Installation
 Using pip, this will also install dependencies if necessary:
 
 ::
+
     pip install git+git://github.com/jboomer/python-isobus.git
 
 This will also install a command line tool: vtclient
@@ -15,6 +16,7 @@ This will also install a command line tool: vtclient
 Alternatively, clone this repo and run
 
 ::
+
     setup.py install
 
 
